@@ -43,7 +43,10 @@ fn main() -> glib::ExitCode {
         _ => {}
     }
 
-    let app = adw::Application::builder().application_id(APP_ID).flags(gio::ApplicationFlags::HANDLES_OPEN).build();
+    let app = adw::Application::builder()
+        .application_id(APP_ID)
+        .flags(gio::ApplicationFlags::HANDLES_OPEN)
+        .build();
     app.connect_startup(|_| theme::apply());
     app.connect_activate(|app| {
         if let Some(win) = app.active_window() {

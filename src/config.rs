@@ -26,7 +26,11 @@ pub struct Appearance {
 
 impl Default for Appearance {
     fn default() -> Self {
-        Self { theme_mode: ThemeMode::Dark, accent: DEFAULT_ACCENT.into(), transparency: true }
+        Self {
+            theme_mode: ThemeMode::Dark,
+            accent: DEFAULT_ACCENT.into(),
+            transparency: true,
+        }
     }
 }
 

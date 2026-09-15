@@ -7,13 +7,15 @@
 
 use std::cell::{Cell, RefCell};
 
-use gtk4 as gtk;
 use gtk::{gdk, glib, graphene, gsk, prelude::*, subclass::prelude::*};
+use gtk4 as gtk;
 
 use crate::loader::Image;
 
 const MIN_ZOOM: f64 = 0.02;
 const MAX_ZOOM: f64 = 40.0;
+
+type ZoomCallback = Box<dyn Fn(f64)>;
 
 mod imp {
     use super::*;
@@ -33,7 +35,7 @@ mod imp {
         pub drag_origin: Cell<(f64, f64)>,
         pub pinch_origin: Cell<f64>,
         pub last_zoom: Cell<f64>,
-        pub on_zoom: RefCell<Option<Box<dyn Fn(f64)>>>,
+        pub on_zoom: RefCell<Option<ZoomCallback>>,
     }
 
     #[glib::object_subclass]
@@ -113,7 +115,10 @@ impl Canvas {
     pub fn texture(&self) -> Option<gdk::Texture> {
         let imp = self.imp();
         let image = imp.image.borrow();
-        image.as_ref().and_then(|i| i.frames.get(imp.frame.get())).map(|f| f.texture.clone())
+        image
+            .as_ref()
+            .and_then(|i| i.frames.get(imp.frame.get()))
+            .map(|f| f.texture.clone())
     }
 
     /// Called with the zoom (1.0 = 100%) whenever it changes.
@@ -161,7 +166,8 @@ impl Canvas {
 
     pub fn rotate(&self, quarter_turns: i8) {
         let imp = self.imp();
-        imp.turns.set((imp.turns.get() as i8 + quarter_turns).rem_euclid(4) as u8);
+        imp.turns
+            .set((imp.turns.get() as i8 + quarter_turns).rem_euclid(4) as u8);
         imp.pan.set((0.0, 0.0));
         self.clamp_pan();
         self.queue_draw();
@@ -176,13 +182,19 @@ impl Canvas {
 
     /// Zoom in device pixels per image pixel.
     fn scale(&self) -> f64 {
-        if self.imp().fit.get() { self.fit_scale() } else { self.imp().zoom.get() }
+        if self.imp().fit.get() {
+            self.fit_scale()
+        } else {
+            self.imp().zoom.get()
+        }
     }
 
     fn fit_scale(&self) -> f64 {
         let imp = self.imp();
         let image = imp.image.borrow();
-        let Some(image) = image.as_ref() else { return 1.0 };
+        let Some(image) = image.as_ref() else {
+            return 1.0;
+        };
         let (vw, vh) = (self.width() as f64, self.height() as f64);
         if vw <= 0.0 || vh <= 0.0 {
             return 1.0;
@@ -194,11 +206,18 @@ impl Canvas {
     }
 
     fn device_scale(&self) -> f64 {
-        self.native().and_then(|n| n.surface()).map_or(1.0, |s| s.scale()).max(0.1)
+        self.native()
+            .and_then(|n| n.surface())
+            .map_or(1.0, |s| s.scale())
+            .max(0.1)
     }
 
     fn rotated(&self, w: f64, h: f64) -> (f64, f64) {
-        if self.imp().turns.get() % 2 == 1 { (h, w) } else { (w, h) }
+        if self.imp().turns.get() % 2 == 1 {
+            (h, w)
+        } else {
+            (w, h)
+        }
     }
 
     /// The image's on-screen size in logical pixels, rotation applied.
@@ -211,11 +230,14 @@ impl Canvas {
 
     fn clamp_pan(&self) {
         let imp = self.imp();
-        let Some((w, h)) = self.display_size() else { return };
+        let Some((w, h)) = self.display_size() else {
+            return;
+        };
         let over_x = ((w - self.width() as f64) / 2.0).max(0.0);
         let over_y = ((h - self.height() as f64) / 2.0).max(0.0);
         let (px, py) = imp.pan.get();
-        imp.pan.set((px.clamp(-over_x, over_x), py.clamp(-over_y, over_y)));
+        imp.pan
+            .set((px.clamp(-over_x, over_x), py.clamp(-over_y, over_y)));
     }
 
     fn pan_by(&self, dx: f64, dy: f64) {
@@ -226,7 +248,8 @@ impl Canvas {
     }
 
     fn pannable(&self) -> bool {
-        self.display_size().is_some_and(|(w, h)| w > self.width() as f64 || h > self.height() as f64)
+        self.display_size()
+            .is_some_and(|(w, h)| w > self.width() as f64 || h > self.height() as f64)
     }
 
     /// Report the zoom on idle: this runs inside size_allocate, where
@@ -273,11 +296,16 @@ impl Canvas {
         let imp = self.imp();
         let image = imp.image.borrow();
         let Some(image) = image.as_ref() else { return };
-        let Some(frame) = image.frames.get(imp.frame.get()) else { return };
+        let Some(frame) = image.frames.get(imp.frame.get()) else {
+            return;
+        };
 
         let ds = self.device_scale();
         let scale = self.scale();
-        let (w, h) = (image.width as f64 * scale / ds, image.height as f64 * scale / ds);
+        let (w, h) = (
+            image.width as f64 * scale / ds,
+            image.height as f64 * scale / ds,
+        );
         let (rw, rh) = self.rotated(w, h);
         let (px, py) = imp.pan.get();
         let (vw, vh) = (self.width() as f64, self.height() as f64);
@@ -358,9 +386,13 @@ impl Canvas {
         let scroll = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::BOTH_AXES);
         let weak = self.downgrade();
         scroll.connect_scroll(move |controller, dx, dy| {
-            let Some(canvas) = weak.upgrade() else { return glib::Propagation::Proceed };
+            let Some(canvas) = weak.upgrade() else {
+                return glib::Propagation::Proceed;
+            };
             let anchor = Some(canvas.imp().pointer.get());
-            let ctrl = controller.current_event_state().contains(gdk::ModifierType::CONTROL_MASK);
+            let ctrl = controller
+                .current_event_state()
+                .contains(gdk::ModifierType::CONTROL_MASK);
             if controller.unit() == gdk::ScrollUnit::Wheel {
                 if dy != 0.0 {
                     canvas.zoom_by(1.2f64.powf(-dy), anchor);
@@ -384,7 +416,10 @@ impl Canvas {
         let weak = self.downgrade();
         pinch.connect_scale_changed(move |gesture, factor| {
             if let Some(canvas) = weak.upgrade() {
-                canvas.zoom_to(canvas.imp().pinch_origin.get() * factor, gesture.bounding_box_center());
+                canvas.zoom_to(
+                    canvas.imp().pinch_origin.get() * factor,
+                    gesture.bounding_box_center(),
+                );
             }
         });
         self.add_controller(pinch);

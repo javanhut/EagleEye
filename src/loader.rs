@@ -18,8 +18,9 @@ use image::{AnimationDecoder, DynamicImage, ImageDecoder, ImageFormat, ImageRead
 
 /// Extensions EagleEye lists when walking a folder and offers in Open.
 pub const EXTENSIONS: &[&str] = &[
-    "png", "apng", "jpg", "jpeg", "jpe", "jfif", "gif", "webp", "bmp", "dib", "tif", "tiff", "ico", "cur", "tga",
-    "pbm", "pgm", "ppm", "pnm", "pam", "qoi", "hdr", "exr", "dds", "ff", "svg", "svgz", "avif", "heic", "heif", "jxl",
+    "png", "apng", "jpg", "jpeg", "jpe", "jfif", "gif", "webp", "bmp", "dib", "tif", "tiff", "ico",
+    "cur", "tga", "pbm", "pgm", "ppm", "pnm", "pam", "qoi", "hdr", "exr", "dds", "ff", "svg",
+    "svgz", "avif", "heic", "heif", "jxl",
 ];
 
 /// SVGs are rasterized so the long side is at least this many pixels, which
@@ -57,20 +58,33 @@ pub fn load(path: &Path) -> anyhow::Result<Image> {
     let data = fs::read(path).with_context(|| format!("couldn’t read {}", path.display()))?;
     let file_size = data.len() as u64;
 
-    if is_svg(path, &data) {
+    // Magic bytes are the strongest evidence, so they are checked before any
+    // text sniffing: compressed PNG data can contain the bytes `<svg`.
+    let magic = image::guess_format(&data).ok();
+    if magic.is_none() && is_svg(path, &data) {
         return svg(&data, file_size);
     }
 
-    let format = image::guess_format(&data).ok().or_else(|| ImageFormat::from_path(path).ok());
+    let format = magic.or_else(|| ImageFormat::from_path(path).ok());
     let decoded = match format {
         Some(format) => raster(&data, format).map_err(anyhow::Error::from),
         None => Err(anyhow::anyhow!("not an image EagleEye recognizes")),
     };
     match decoded {
         Ok(frames) => {
-            let (width, height) = (frames[0].texture.width() as u32, frames[0].texture.height() as u32);
+            let (width, height) = (
+                frames[0].texture.width() as u32,
+                frames[0].texture.height() as u32,
+            );
             let name = format.map_or_else(String::new, |f| f.extensions_str()[0].to_uppercase());
-            Ok(Image { frames, width, height, format: name, scalable: false, file_size })
+            Ok(Image {
+                frames,
+                width,
+                height,
+                format: name,
+                scalable: false,
+                file_size,
+            })
         }
         // HEIC, AVIF, JPEG XL and friends: GTK's glycin loaders know them.
         Err(err) => fallback(path, file_size).map_err(|_| err),
@@ -102,7 +116,10 @@ fn raster(data: &[u8], format: ImageFormat) -> image::ImageResult<Vec<Frame>> {
     let orientation = decoder.orientation()?;
     let mut img = DynamicImage::from_decoder(decoder)?;
     img.apply_orientation(orientation);
-    Ok(vec![Frame { texture: still(img), delay: Duration::ZERO }])
+    Ok(vec![Frame {
+        texture: still(img),
+        delay: Duration::ZERO,
+    }])
 }
 
 fn animation(frames: image::Frames<'_>) -> image::ImageResult<Vec<Frame>> {
@@ -115,10 +132,15 @@ fn animation(frames: image::Frames<'_>) -> image::ImageResult<Vec<Frame>> {
         let delay = Duration::from_millis(if ms <= 10 { 100 } else { ms });
         let buffer = frame.into_buffer();
         let (w, h) = buffer.dimensions();
-        out.push(Frame { texture: texture(w, h, gdk::MemoryFormat::R8g8b8a8, buffer.into_raw(), 4), delay });
+        out.push(Frame {
+            texture: texture(w, h, gdk::MemoryFormat::R8g8b8a8, buffer.into_raw(), 4),
+            delay,
+        });
     }
     if out.is_empty() {
-        return Err(image::ImageError::IoError(std::io::Error::other("animation has no frames")));
+        return Err(image::ImageError::IoError(std::io::Error::other(
+            "animation has no frames",
+        )));
     }
     Ok(out)
 }
@@ -127,19 +149,32 @@ fn still(img: DynamicImage) -> gdk::Texture {
     let (w, h) = (img.width(), img.height());
     match img {
         DynamicImage::ImageRgb8(rgb) => texture(w, h, gdk::MemoryFormat::R8g8b8, rgb.into_raw(), 3),
-        other => texture(w, h, gdk::MemoryFormat::R8g8b8a8, other.into_rgba8().into_raw(), 4),
+        other => texture(
+            w,
+            h,
+            gdk::MemoryFormat::R8g8b8a8,
+            other.into_rgba8().into_raw(),
+            4,
+        ),
     }
 }
 
-fn texture(w: u32, h: u32, format: gdk::MemoryFormat, pixels: Vec<u8>, channels: usize) -> gdk::Texture {
+fn texture(
+    w: u32,
+    h: u32,
+    format: gdk::MemoryFormat,
+    pixels: Vec<u8>,
+    channels: usize,
+) -> gdk::Texture {
     let bytes = glib::Bytes::from_owned(pixels);
     gdk::MemoryTexture::new(w as i32, h as i32, format, &bytes, w as usize * channels).upcast()
 }
 
 fn is_svg(path: &Path, data: &[u8]) -> bool {
-    let by_name = path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
-        e.eq_ignore_ascii_case("svg") || e.eq_ignore_ascii_case("svgz")
-    });
+    let by_name = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("svg") || e.eq_ignore_ascii_case("svgz"));
     by_name || String::from_utf8_lossy(&data[..data.len().min(1024)]).contains("<svg")
 }
 
@@ -152,11 +187,24 @@ fn svg(data: &[u8], file_size: u64) -> anyhow::Result<Image> {
     let size = tree.size();
     let long = size.width().max(size.height()).max(1.0);
     let scale = (SVG_MIN_SIDE / long).max(1.0).min(SVG_MAX_SIDE / long);
-    let (w, h) = ((size.width() * scale).ceil().max(1.0) as u32, (size.height() * scale).ceil().max(1.0) as u32);
+    let (w, h) = (
+        (size.width() * scale).ceil().max(1.0) as u32,
+        (size.height() * scale).ceil().max(1.0) as u32,
+    );
     let mut pixmap = tiny_skia::Pixmap::new(w, h).context("SVG is too large to draw")?;
-    resvg::render(&tree, tiny_skia::Transform::from_scale(scale, scale), &mut pixmap.as_mut());
+    resvg::render(
+        &tree,
+        tiny_skia::Transform::from_scale(scale, scale),
+        &mut pixmap.as_mut(),
+    );
     let frame = Frame {
-        texture: texture(w, h, gdk::MemoryFormat::R8g8b8a8Premultiplied, pixmap.take(), 4),
+        texture: texture(
+            w,
+            h,
+            gdk::MemoryFormat::R8g8b8a8Premultiplied,
+            pixmap.take(),
+            4,
+        ),
         delay: Duration::ZERO,
     };
     Ok(Image {
@@ -171,11 +219,18 @@ fn svg(data: &[u8], file_size: u64) -> anyhow::Result<Image> {
 
 fn fallback(path: &Path, file_size: u64) -> anyhow::Result<Image> {
     let texture = gdk::Texture::from_filename(path)?;
-    let format = path.extension().and_then(|e| e.to_str()).unwrap_or("image").to_uppercase();
+    let format = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("image")
+        .to_uppercase();
     Ok(Image {
         width: texture.width() as u32,
         height: texture.height() as u32,
-        frames: vec![Frame { texture, delay: Duration::ZERO }],
+        frames: vec![Frame {
+            texture,
+            delay: Duration::ZERO,
+        }],
         format,
         scalable: false,
         file_size,
@@ -186,7 +241,11 @@ fn fallback(path: &Path, file_size: u64) -> anyhow::Result<Image> {
 /// person expects: `img2` before `img10`, case ignored.
 pub fn siblings(path: &Path) -> Vec<PathBuf> {
     let path = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-    let dir = if path.is_dir() { path.clone() } else { path.parent().map(Path::to_path_buf).unwrap_or_default() };
+    let dir = if path.is_dir() {
+        path.clone()
+    } else {
+        path.parent().map(Path::to_path_buf).unwrap_or_default()
+    };
     let mut files: Vec<PathBuf> = fs::read_dir(&dir)
         .map(|entries| {
             entries
@@ -204,7 +263,9 @@ pub fn siblings(path: &Path) -> Vec<PathBuf> {
 }
 
 pub fn file_name(path: &Path) -> String {
-    path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
+    path.file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default()
 }
 
 pub fn natural_cmp(a: &str, b: &str) -> Ordering {
@@ -249,7 +310,9 @@ mod tests {
     #[test]
     fn png_decodes() {
         let path = scratch("still.png");
-        RgbImage::from_pixel(7, 3, Rgb([1, 2, 3])).save(&path).unwrap();
+        RgbImage::from_pixel(7, 3, Rgb([1, 2, 3]))
+            .save(&path)
+            .unwrap();
         let img = load(&path).unwrap();
         assert_eq!((img.width, img.height), (7, 3));
         assert_eq!(img.frames.len(), 1);
@@ -259,7 +322,25 @@ mod tests {
     #[test]
     fn content_wins_over_extension() {
         let path = scratch("really-a-png.jpg");
-        RgbaImage::from_pixel(5, 5, Rgba([9, 9, 9, 128])).save_with_format(&path, ImageFormat::Png).unwrap();
+        RgbaImage::from_pixel(5, 5, Rgba([9, 9, 9, 128]))
+            .save_with_format(&path, ImageFormat::Png)
+            .unwrap();
+        let img = load(&path).unwrap();
+        assert_eq!(img.format, "PNG");
+        assert_eq!((img.width, img.height), (5, 5));
+    }
+
+    /// A real PNG whose bytes happen to contain `<svg` was once routed to the
+    /// SVG parser and refused.
+    #[test]
+    fn png_containing_svg_bytes_is_still_a_png() {
+        let path = scratch("svg-bytes.png");
+        let mut bytes = Vec::new();
+        RgbImage::from_pixel(5, 5, Rgb([200, 10, 10]))
+            .write_to(&mut Cursor::new(&mut bytes), ImageFormat::Png)
+            .unwrap();
+        bytes.extend_from_slice(b"<svg xmlns=\"http://www.w3.org/2000/svg\"/>");
+        fs::write(&path, &bytes).unwrap();
         let img = load(&path).unwrap();
         assert_eq!(img.format, "PNG");
         assert_eq!((img.width, img.height), (5, 5));
@@ -310,6 +391,34 @@ mod tests {
         assert_eq!(names, ["IMG1.png", "img2.png", "img02b.png", "img10.png"]);
     }
 
+    /// Decode every file in a folder of real images:
+    /// `EAGLEEYE_SAMPLES=~/Pictures cargo test smoke -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn smoke() {
+        let dir = PathBuf::from(std::env::var("EAGLEEYE_SAMPLES").expect("set EAGLEEYE_SAMPLES"));
+        let mut failed = 0;
+        for path in siblings(&dir) {
+            let start = std::time::Instant::now();
+            match load(&path) {
+                Ok(img) => println!(
+                    "ok   {:<16} {:<6} {:>5}×{:<5} frames={:<3} {:?}",
+                    file_name(&path),
+                    img.format,
+                    img.width,
+                    img.height,
+                    img.frames.len(),
+                    start.elapsed()
+                ),
+                Err(err) => {
+                    failed += 1;
+                    println!("FAIL {:<16} {err:#}", file_name(&path));
+                }
+            }
+        }
+        assert_eq!(failed, 0);
+    }
+
     #[test]
     fn siblings_lists_only_images() {
         let dir = scratch("folder");
@@ -317,7 +426,10 @@ mod tests {
         for name in ["b10.png", "b9.JPG", "notes.txt"] {
             fs::write(dir.join(name), b"x").unwrap();
         }
-        let names: Vec<String> = siblings(&dir.join("b10.png")).iter().map(|p| file_name(p)).collect();
+        let names: Vec<String> = siblings(&dir.join("b10.png"))
+            .iter()
+            .map(|p| file_name(p))
+            .collect();
         assert_eq!(names, ["b9.JPG", "b10.png"]);
     }
 }

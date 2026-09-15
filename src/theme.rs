@@ -34,7 +34,11 @@ pub fn apply() {
     let display = gtk::gdk::Display::default().expect("no display");
     let base = gtk::CssProvider::new();
     base.load_from_string(BASE_CSS);
-    gtk::style_context_add_provider_for_display(&display, &base, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+    gtk::style_context_add_provider_for_display(
+        &display,
+        &base,
+        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
 
     let appearance = Desktop::load().appearance;
     adw::StyleManager::default().set_color_scheme(match appearance.theme_mode {
@@ -42,14 +46,26 @@ pub fn apply() {
         ThemeMode::Light => adw::ColorScheme::ForceLight,
         ThemeMode::Auto => adw::ColorScheme::PreferDark,
     });
-    let accent = if is_hex(&appearance.accent) { appearance.accent.as_str() } else { DEFAULT_ACCENT };
+    let accent = if is_hex(&appearance.accent) {
+        appearance.accent.as_str()
+    } else {
+        DEFAULT_ACCENT
+    };
     let css = format!(
         "@define-color accent_bg_color {accent};\n@define-color accent_color {accent};\n{}",
-        if appearance.theme_mode == ThemeMode::Light { include_str!("../data/raven-glass-light.css") } else { "" }
+        if appearance.theme_mode == ThemeMode::Light {
+            include_str!("../data/raven-glass-light.css")
+        } else {
+            ""
+        }
     );
     let overlay = gtk::CssProvider::new();
     overlay.load_from_string(&css);
-    gtk::style_context_add_provider_for_display(&display, &overlay, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+    gtk::style_context_add_provider_for_display(
+        &display,
+        &overlay,
+        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1,
+    );
 }
 
 /// Whether the desktop asked for translucent windows.

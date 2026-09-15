@@ -9,8 +9,8 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use gtk4 as gtk;
 use gtk::{gdk, gio, glib};
+use gtk4 as gtk;
 use libadwaita as adw;
 use libadwaita::prelude::*;
 
@@ -23,11 +23,33 @@ pub const APP_ID: &str = "com.eagleeye.Raven";
 /// Every type EagleEye claims in `set-default`. Keep in step with the
 /// MimeType= line of the desktop entry.
 pub const MIME_TYPES: &[&str] = &[
-    "image/png", "image/apng", "image/jpeg", "image/pjpeg", "image/gif", "image/webp", "image/bmp", "image/x-bmp",
-    "image/tiff", "image/x-icon", "image/vnd.microsoft.icon", "image/x-tga", "image/x-portable-anymap",
-    "image/x-portable-bitmap", "image/x-portable-graymap", "image/x-portable-pixmap", "image/qoi", "image/x-qoi",
-    "image/vnd.radiance", "image/x-exr", "image/x-dds", "image/svg+xml", "image/svg+xml-compressed", "image/avif",
-    "image/heif", "image/heic", "image/jxl",
+    "image/png",
+    "image/apng",
+    "image/jpeg",
+    "image/pjpeg",
+    "image/gif",
+    "image/webp",
+    "image/bmp",
+    "image/x-bmp",
+    "image/tiff",
+    "image/x-icon",
+    "image/vnd.microsoft.icon",
+    "image/x-tga",
+    "image/x-portable-anymap",
+    "image/x-portable-bitmap",
+    "image/x-portable-graymap",
+    "image/x-portable-pixmap",
+    "image/qoi",
+    "image/x-qoi",
+    "image/vnd.radiance",
+    "image/x-exr",
+    "image/x-dds",
+    "image/svg+xml",
+    "image/svg+xml-compressed",
+    "image/avif",
+    "image/heif",
+    "image/heic",
+    "image/jxl",
 ];
 
 const OSD_HIDE_AFTER: Duration = Duration::from_millis(1800);
@@ -78,7 +100,12 @@ impl Window {
         // ── Header ──────────────────────────────────────────────────────
         let title = adw::WindowTitle::new("EagleEye", "");
         let header = adw::HeaderBar::builder().title_widget(&title).build();
-        header.pack_start(&icon_button("document-open-symbolic", "Open… (Ctrl+O)", "win.open", false));
+        header.pack_start(&icon_button(
+            "document-open-symbolic",
+            "Open… (Ctrl+O)",
+            "win.open",
+            false,
+        ));
 
         let file_section = gio::Menu::new();
         file_section.append(Some("Open…"), Some("win.open"));
@@ -86,15 +113,27 @@ impl Window {
         file_section.append(Some("Copy Image"), Some("win.copy"));
         file_section.append(Some("Move to Trash"), Some("win.trash"));
         let app_section = gio::Menu::new();
-        app_section.append(Some("Make EagleEye the Default Viewer"), Some("win.set-default"));
+        app_section.append(
+            Some("Make EagleEye the Default Viewer"),
+            Some("win.set-default"),
+        );
         app_section.append(Some("Keyboard Shortcuts"), Some("win.shortcuts"));
         app_section.append(Some("About EagleEye"), Some("win.about"));
         let model = gio::Menu::new();
         model.append_section(None, &file_section);
         model.append_section(None, &app_section);
-        let menu = gtk::MenuButton::builder().icon_name("open-menu-symbolic").menu_model(&model).tooltip_text("Menu").build();
+        let menu = gtk::MenuButton::builder()
+            .icon_name("open-menu-symbolic")
+            .menu_model(&model)
+            .tooltip_text("Menu")
+            .build();
         header.pack_end(&menu);
-        header.pack_end(&icon_button("view-fullscreen-symbolic", "Fullscreen (F)", "win.fullscreen", false));
+        header.pack_end(&icon_button(
+            "view-fullscreen-symbolic",
+            "Fullscreen (F)",
+            "win.fullscreen",
+            false,
+        ));
 
         // ── Content ─────────────────────────────────────────────────────
         let open_button = gtk::Button::builder()
@@ -110,7 +149,10 @@ impl Window {
             .child(&open_button)
             .css_classes(["welcome"])
             .build();
-        let error = adw::StatusPage::builder().icon_name("image-missing-symbolic").title("Can’t Open This Image").build();
+        let error = adw::StatusPage::builder()
+            .icon_name("image-missing-symbolic")
+            .title("Can’t Open This Image")
+            .build();
         let canvas = Canvas::new();
 
         let stack = gtk::Stack::builder()
@@ -129,18 +171,56 @@ impl Window {
             .action_name("win.fit")
             .css_classes(["flat", "zoom-label"])
             .build();
-        let bar = gtk::Box::builder().spacing(2).css_classes(["osd-bar"]).build();
-        bar.append(&icon_button("go-previous-symbolic", "Previous (←)", "win.prev", true));
+        let bar = gtk::Box::builder()
+            .spacing(2)
+            .css_classes(["osd-bar"])
+            .build();
+        bar.append(&icon_button(
+            "go-previous-symbolic",
+            "Previous (←)",
+            "win.prev",
+            true,
+        ));
         bar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
-        bar.append(&icon_button("zoom-out-symbolic", "Zoom Out (−)", "win.zoom-out", true));
+        bar.append(&icon_button(
+            "zoom-out-symbolic",
+            "Zoom Out (−)",
+            "win.zoom-out",
+            true,
+        ));
         bar.append(&zoom_label);
-        bar.append(&icon_button("zoom-in-symbolic", "Zoom In (+)", "win.zoom-in", true));
+        bar.append(&icon_button(
+            "zoom-in-symbolic",
+            "Zoom In (+)",
+            "win.zoom-in",
+            true,
+        ));
         bar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
-        bar.append(&icon_button("object-rotate-left-symbolic", "Rotate Left (Shift+R)", "win.rotate-left", true));
-        bar.append(&icon_button("object-rotate-right-symbolic", "Rotate Right (R)", "win.rotate-right", true));
-        bar.append(&icon_button("object-flip-horizontal-symbolic", "Flip (H)", "win.flip", true));
+        bar.append(&icon_button(
+            "object-rotate-left-symbolic",
+            "Rotate Left (Shift+R)",
+            "win.rotate-left",
+            true,
+        ));
+        bar.append(&icon_button(
+            "object-rotate-right-symbolic",
+            "Rotate Right (R)",
+            "win.rotate-right",
+            true,
+        ));
+        bar.append(&icon_button(
+            "object-flip-horizontal-symbolic",
+            "Flip (H)",
+            "win.flip",
+            true,
+        ));
         bar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
-        bar.append(&icon_button("go-next-symbolic", "Next (→)", "win.next", true));
+        bar.append(&icon_button(
+            "go-next-symbolic",
+            "Next (→)",
+            "win.next",
+            true,
+        ));
         let osd = gtk::Revealer::builder()
             .child(&bar)
             .transition_type(gtk::RevealerTransitionType::Crossfade)
@@ -168,7 +248,8 @@ impl Window {
         window.set_content(Some(&toolbar));
 
         let label = zoom_label.clone();
-        canvas.connect_zoom_changed(move |scale| label.set_label(&format!("{:.0}%", scale * 100.0)));
+        canvas
+            .connect_zoom_changed(move |scale| label.set_label(&format!("{:.0}%", scale * 100.0)));
 
         let this = Window(Rc::new(Inner {
             window,
@@ -202,7 +283,12 @@ impl Window {
     pub fn for_app(app: &adw::Application) -> Window {
         let active = app.active_window();
         WINDOWS
-            .with(|w| w.borrow().iter().find(|w| active.as_ref() == Some(w.0.window.upcast_ref())).cloned())
+            .with(|w| {
+                w.borrow()
+                    .iter()
+                    .find(|w| active.as_ref() == Some(w.0.window.upcast_ref()))
+                    .cloned()
+            })
             .unwrap_or_else(|| Window::new(app))
     }
 
@@ -243,9 +329,14 @@ impl Window {
     fn show(&self, index: usize) {
         let (path, neighbours) = {
             let files = self.0.files.borrow();
-            let Some(path) = files.get(index).cloned() else { return };
+            let Some(path) = files.get(index).cloned() else {
+                return;
+            };
             let len = files.len();
-            let mut near = vec![files[(index + 1) % len].clone(), files[(index + len - 1) % len].clone()];
+            let mut near = vec![
+                files[(index + 1) % len].clone(),
+                files[(index + len - 1) % len].clone(),
+            ];
             near.dedup();
             near.retain(|p| *p != path);
             (path, near)
@@ -277,14 +368,20 @@ impl Window {
     }
 
     fn decode(&self, path: PathBuf) {
-        if self.0.cache.borrow().contains_key(&path) || !self.0.pending.borrow_mut().insert(path.clone()) {
+        if self.0.cache.borrow().contains_key(&path)
+            || !self.0.pending.borrow_mut().insert(path.clone())
+        {
             return;
         }
         let (tx, rx) = async_channel::bounded(1);
         let wanted = self.0.wanted.clone();
         let job = path.clone();
         std::thread::spawn(move || {
-            let result = wanted.lock().unwrap().contains(&job).then(|| loader::load(&job));
+            let result = wanted
+                .lock()
+                .unwrap()
+                .contains(&job)
+                .then(|| loader::load(&job));
             let _ = tx.send_blocking(result);
         });
         let this = self.clone();
@@ -317,7 +414,8 @@ impl Window {
     fn spinner_later(&self, path: PathBuf) {
         let this = self.clone();
         glib::timeout_add_local_once(SPINNER_AFTER, move || {
-            if this.current_path() == Some(path.clone()) && this.0.pending.borrow().contains(&path) {
+            if this.current_path() == Some(path.clone()) && this.0.pending.borrow().contains(&path)
+            {
                 this.0.spinner.set_visible(true);
                 this.0.spinner.start();
             }
@@ -335,7 +433,9 @@ impl Window {
         self.stop_spinner();
         self.set_subtitle(path, None);
         self.0.canvas.set_image(None);
-        self.0.error.set_description(Some(&glib::markup_escape_text(message)));
+        self.0
+            .error
+            .set_description(Some(&glib::markup_escape_text(message)));
         self.0.stack.set_visible_child_name("error");
     }
 
@@ -365,7 +465,11 @@ impl Window {
         }
         match image {
             Some(image) => {
-                let animated = if image.frames.len() > 1 { " (animated)" } else { "" };
+                let animated = if image.frames.len() > 1 {
+                    " (animated)"
+                } else {
+                    ""
+                };
                 parts.push(format!("{}{animated}", image.format));
                 parts.push(format!("{} × {}", image.width, image.height));
                 parts.push(human_size(image.file_size));
@@ -386,7 +490,9 @@ impl Window {
     // ── The pill: always there in a window, on mouse movement in fullscreen.
     fn sync_osd(&self) {
         let has_files = !self.0.files.borrow().is_empty();
-        self.0.osd.set_reveal_child(has_files && !self.0.window.is_fullscreen());
+        self.0
+            .osd
+            .set_reveal_child(has_files && !self.0.window.is_fullscreen());
     }
 
     fn install_osd_autohide(&self, overlay: &gtk::Overlay) {
@@ -454,44 +560,59 @@ impl Window {
         add("rotate-left", Box::new(|w| w.0.canvas.rotate(-1)));
         add("rotate-right", Box::new(|w| w.0.canvas.rotate(1)));
         add("flip", Box::new(|w| w.0.canvas.flip()));
-        add("fullscreen", Box::new(|w| {
-            if w.0.window.is_fullscreen() {
-                w.0.window.unfullscreen();
-            } else {
-                w.0.window.fullscreen();
-            }
-        }));
-        add("copy", Box::new(|w| {
-            if let Some(texture) = w.0.canvas.texture() {
-                w.0.window.clipboard().set_texture(&texture);
-                w.toast("Image copied");
-            }
-        }));
+        add(
+            "fullscreen",
+            Box::new(|w| {
+                if w.0.window.is_fullscreen() {
+                    w.0.window.unfullscreen();
+                } else {
+                    w.0.window.fullscreen();
+                }
+            }),
+        );
+        add(
+            "copy",
+            Box::new(|w| {
+                if let Some(texture) = w.0.canvas.texture() {
+                    w.0.window.clipboard().set_texture(&texture);
+                    w.toast("Image copied");
+                }
+            }),
+        );
         add("trash", Box::new(|w| w.trash()));
         add("show-in-folder", Box::new(|w| w.show_in_folder()));
-        add("set-default", Box::new(|w| {
-            w.toast(match set_default_for_images() {
-                Ok(()) => "EagleEye now opens your images",
-                Err(_) => "Couldn’t set the default (is xdg-mime installed?)",
-            });
-        }));
+        add(
+            "set-default",
+            Box::new(|w| {
+                w.toast(match set_default_for_images() {
+                    Ok(()) => "EagleEye now opens your images",
+                    Err(_) => "Couldn’t set the default (is xdg-mime installed?)",
+                });
+            }),
+        );
         add("shortcuts", Box::new(|w| w.show_shortcuts()));
-        add("about", Box::new(|w| {
-            adw::AboutDialog::builder()
-                .application_name("EagleEye")
-                .application_icon(APP_ID)
-                .version(env!("CARGO_PKG_VERSION"))
-                .comments("Every kind of image, on Raven Linux.")
-                .license_type(gtk::License::MitX11)
-                .build()
-                .present(Some(&w.0.window));
-        }));
+        add(
+            "about",
+            Box::new(|w| {
+                adw::AboutDialog::builder()
+                    .application_name("EagleEye")
+                    .application_icon(APP_ID)
+                    .version(env!("CARGO_PKG_VERSION"))
+                    .comments("Every kind of image, on Raven Linux.")
+                    .license_type(gtk::License::MitX11)
+                    .build()
+                    .present(Some(&w.0.window));
+            }),
+        );
         add("close", Box::new(|w| w.0.window.close()));
 
         let app = win.application().expect("window has an application");
         for (action, keys) in [
             ("win.open", &["<Ctrl>o"][..]),
-            ("win.zoom-in", &["plus", "equal", "KP_Add", "<Ctrl>plus", "<Ctrl>equal"]),
+            (
+                "win.zoom-in",
+                &["plus", "equal", "KP_Add", "<Ctrl>plus", "<Ctrl>equal"],
+            ),
             ("win.zoom-out", &["minus", "KP_Subtract", "<Ctrl>minus"]),
             ("win.fit", &["0", "KP_0", "<Ctrl>0"]),
             ("win.actual-size", &["1", "KP_1"]),
@@ -542,7 +663,11 @@ impl Window {
         let target = gtk::DropTarget::new(gdk::FileList::static_type(), gdk::DragAction::COPY);
         let this = self.clone();
         target.connect_drop(move |_, value, _, _| {
-            match value.get::<gdk::FileList>().ok().and_then(|l| l.files().into_iter().next()) {
+            match value
+                .get::<gdk::FileList>()
+                .ok()
+                .and_then(|l| l.files().into_iter().next())
+            {
                 Some(file) => {
                     this.open(file);
                     true
@@ -569,8 +694,15 @@ impl Window {
         filters.append(&images);
         filters.append(&everything);
 
-        let dialog = gtk::FileDialog::builder().title("Open Image").filters(&filters).modal(true).build();
-        if let Some(dir) = self.current_path().and_then(|p| p.parent().map(gio::File::for_path)) {
+        let dialog = gtk::FileDialog::builder()
+            .title("Open Image")
+            .filters(&filters)
+            .modal(true)
+            .build();
+        if let Some(dir) = self
+            .current_path()
+            .and_then(|p| p.parent().map(gio::File::for_path))
+        {
             dialog.set_initial_folder(Some(&dir));
         }
         let this = self.clone();
@@ -582,7 +714,9 @@ impl Window {
     }
 
     fn trash(&self) {
-        let Some(path) = self.current_path() else { return };
+        let Some(path) = self.current_path() else {
+            return;
+        };
         let file = gio::File::for_path(&path);
         let this = self.clone();
         glib::spawn_future_local(async move {
@@ -612,7 +746,9 @@ impl Window {
     }
 
     fn show_in_folder(&self) {
-        let Some(path) = self.current_path() else { return };
+        let Some(path) = self.current_path() else {
+            return;
+        };
         let launcher = gtk::FileLauncher::new(Some(&gio::File::for_path(&path)));
         let this = self.clone();
         launcher.open_containing_folder(Some(&self.0.window), gio::Cancellable::NONE, move |res| {
@@ -636,10 +772,19 @@ impl Window {
             ("Move to Trash", "Delete"),
             ("Close window", "Ctrl+W"),
         ];
-        let list = gtk::ListBox::builder().css_classes(["boxed-list"]).selection_mode(gtk::SelectionMode::None).build();
+        let list = gtk::ListBox::builder()
+            .css_classes(["boxed-list"])
+            .selection_mode(gtk::SelectionMode::None)
+            .build();
         for (what, keys) in rows {
             let row = adw::ActionRow::builder().title(what).build();
-            row.add_suffix(&gtk::Label::builder().label(keys).css_classes(["kbd"]).valign(gtk::Align::Center).build());
+            row.add_suffix(
+                &gtk::Label::builder()
+                    .label(keys)
+                    .css_classes(["kbd"])
+                    .valign(gtk::Align::Center)
+                    .build(),
+            );
             list.append(&row);
         }
         let page = gtk::Box::builder()
@@ -663,7 +808,11 @@ impl Window {
 }
 
 fn icon_button(icon: &str, tooltip: &str, action: &str, flat: bool) -> gtk::Button {
-    let button = gtk::Button::builder().icon_name(icon).tooltip_text(tooltip).action_name(action).build();
+    let button = gtk::Button::builder()
+        .icon_name(icon)
+        .tooltip_text(tooltip)
+        .action_name(action)
+        .build();
     if flat {
         button.add_css_class("flat");
     }
