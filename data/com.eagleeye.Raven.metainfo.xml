@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.eagleeye.Raven</id>
+  <name>EagleEye</name>
+  <summary>View every kind of image</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <description>
+    <p>
+      A fast image viewer for Raven Linux. PNG, JPEG, WebP, GIF, BMP, TIFF,
+      ICO, TGA, QOI, HDR, EXR, SVG, HEIC, AVIF and JPEG XL; animated GIF,
+      WebP and APNG play. Zoom, pan, rotate, and flip through a folder with
+      the arrow keys.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.eagleeye.Raven.desktop</launchable>
+  <categories>
+    <category>Graphics</category>
+    <category>Viewer</category>
+  </categories>
+</component>

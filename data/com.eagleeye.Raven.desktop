@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=EagleEye
+GenericName=Image Viewer
+Comment=View every kind of image — PNG, JPEG, WebP, GIF, SVG, HEIC, AVIF and more
+Exec=eagleeye %U
+Icon=com.eagleeye.Raven
+Terminal=false
+Type=Application
+Categories=Graphics;Viewer;GTK;
+Keywords=Image;Picture;Photo;Viewer;PNG;JPEG;WebP;GIF;SVG;
+MimeType=image/png;image/apng;image/jpeg;image/pjpeg;image/gif;image/webp;image/bmp;image/x-bmp;image/tiff;image/x-icon;image/vnd.microsoft.icon;image/x-tga;image/x-portable-anymap;image/x-portable-bitmap;image/x-portable-graymap;image/x-portable-pixmap;image/qoi;image/x-qoi;image/vnd.radiance;image/x-exr;image/x-dds;image/svg+xml;image/svg+xml-compressed;image/avif;image/heif;image/heic;image/jxl;
+StartupNotify=true
+StartupWMClass=eagleeye
+DBusActivatable=false

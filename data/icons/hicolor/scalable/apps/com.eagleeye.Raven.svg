@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a2a38"/>
+      <stop offset="1" stop-color="#16161f"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9db8f9"/>
+      <stop offset="1" stop-color="#dfe3f5"/>
+    </linearGradient>
+    <clipPath id="photo">
+      <rect x="26" y="30" width="76" height="60" rx="8"/>
+    </clipPath>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#bg)"/>
+  <rect x="8.5" y="8.5" width="111" height="111" rx="25.5" fill="none" stroke="#ffffff" stroke-opacity="0.10"/>
+  <!-- the photo: sky, sun, two hills -->
+  <g clip-path="url(#photo)">
+    <rect x="26" y="30" width="76" height="60" fill="url(#sky)"/>
+    <circle cx="84" cy="46" r="7" fill="#ffffff"/>
+    <path d="M26 90V74l20-18 22 20 12-10 22 18v6z" fill="#5c6aa8"/>
+    <path d="M26 90V80l18-10 30 20z" fill="#3d4780"/>
+  </g>
+  <!-- the eagle's eye: an accent lens over the photo -->
+  <circle cx="80" cy="84" r="17" fill="#7AA2F7" fill-opacity="0.22" stroke="#7AA2F7" stroke-width="6"/>
+  <path d="M92 96l12 12" stroke="#7AA2F7" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="74" cy="78" r="4" fill="#ffffff" fill-opacity="0.8"/>
+</svg>

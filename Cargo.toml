@@ -1,0 +1,47 @@
+[package]
+name = "eagleeye"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+license = "MIT OR Apache-2.0"
+description = "EagleEye: a fast image viewer for Raven Linux. Every common format, animated GIF/WebP/APNG, SVG, HEIC/AVIF/JXL."
+
+[[bin]]
+name = "eagleeye"
+path = "src/main.rs"
+
+[dependencies]
+# Pinned to the same gtk-rs generation as RavenViewer, RavenStore and
+# RavenSettingsUI so every Raven app resolves one set of bindings.
+gtk4 = { version = "0.10", features = ["v4_12"] }
+libadwaita = { version = "0.8", features = ["v1_5"] }
+glib = "0.21"
+gio = "0.21"
+# Decode threads hand finished images to the GTK main loop over this.
+async-channel = "2"
+
+# Decoding is pure Rust on purpose, like RavenViewer: no C toolchain beyond
+# GTK. image covers the raster formats, resvg draws SVG. Whatever neither
+# knows (HEIC, AVIF, JXL…) falls through to GTK's own loaders (glycin).
+image = { version = "0.25", default-features = false, features = [
+  "png", "jpeg", "gif", "webp", "bmp", "tiff", "ico", "tga", "pnm",
+  "qoi", "hdr", "exr", "dds", "ff", "rayon",
+] }
+resvg = "0.48"
+
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+anyhow = "1"
+
+[profile.dev]
+debug = "line-tables-only"
+
+# Decoders are unusably slow unoptimized, so dependencies are always -O.
+[profile.dev.package."*"]
+opt-level = 3
+debug = false
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
