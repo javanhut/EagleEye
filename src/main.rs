@@ -5,6 +5,7 @@
 mod canvas;
 mod config;
 mod loader;
+mod resample;
 mod theme;
 mod window;
 

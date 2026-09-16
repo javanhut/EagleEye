@@ -11,7 +11,8 @@ hunting for which viewer handles which format.
 | **Sniffing** | The bytes decide, not the extension: a PNG saved as `.jpg` still opens |
 | **Animation** | Animated GIF, WebP and APNG play |
 | **Folder** | Opens the folder the image is in; `←` / `→` step through it in natural order (`img2` before `img10`), neighbours decoded ahead so stepping is instant |
-| **Zoom** | Fits the window; wheel or pinch zooms around the pointer, drag pans, double-click toggles fit / 100%. 100% is one image pixel per screen pixel, whatever the desktop scale |
+| **Zoom** | Fits the window; wheel or pinch zooms around the pointer, drag pans, double-click toggles fit / 100%. 100% is one image pixel per *screen* pixel — the real, fractional monitor scale, not the whole number the toolkit renders at |
+| **Sharpness** | A shrunk image is resampled with Lanczos on a worker thread to exactly the size it is drawn at, then drawn 1:1, instead of being left to the GPU's soft trilinear filter (~0.3 s for a 30-megapixel photo, 90 ms after zooming stops) |
 | **Orientation** | EXIF rotation applied; rotate and flip by hand |
 | **Look** | GTK 4 + libadwaita with Raven Glass; theme, accent and transparency follow `~/.config/raven/desktop.toml` |
 

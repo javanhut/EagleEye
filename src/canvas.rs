@@ -2,20 +2,40 @@
 //! chosen zoom; drag pans, the wheel and pinch zoom around the pointer,
 //! double-click toggles fit / 100%, and animations play on a timer.
 //!
-//! Zoom is in device pixels: 100% puts one image pixel on one screen pixel,
-//! whatever the desktop's fractional scale.
+//! Two scales matter and they are not the same. The *surface* scale is how
+//! many buffer pixels GTK draws per logical pixel (Huginn always says 1 or
+//! 2). The *monitor* scale is how many real screen pixels a logical pixel
+//! ends up as (1.25 on a 1920×1080 panel laid out as 1536×864). Zoom is in
+//! screen pixels, so 100% puts one image pixel on one pixel of the panel.
+//!
+//! Whenever the image is drawn smaller than its own resolution it is not
+//! left to the GPU's trilinear filter, which is soft: a Lanczos copy at
+//! exactly the drawn size is made on a worker thread and drawn 1:1.
 
 use std::cell::{Cell, RefCell};
+use std::time::Duration;
 
 use gtk::{gdk, glib, graphene, gsk, prelude::*, subclass::prelude::*};
 use gtk4 as gtk;
 
 use crate::loader::Image;
+use crate::resample;
 
 const MIN_ZOOM: f64 = 0.02;
 const MAX_ZOOM: f64 = 40.0;
 
+/// How long zooming or resizing must pause before the sharp copy is made.
+const SHARPEN_AFTER: Duration = Duration::from_millis(90);
+
 type ZoomCallback = Box<dyn Fn(f64)>;
+
+/// Which image (by generation) at which exact buffer size.
+type SharpKey = (u64, u32, u32);
+
+pub struct Sharp {
+    key: SharpKey,
+    texture: gdk::Texture,
+}
 
 mod imp {
     use super::*;
@@ -23,6 +43,9 @@ mod imp {
     #[derive(Default)]
     pub struct Canvas {
         pub image: RefCell<Option<Image>>,
+        /// Bumped on every set_image so late resamples of an old image are
+        /// thrown away.
+        pub generation: Cell<u64>,
         pub frame: Cell<usize>,
         pub timer: RefCell<Option<glib::SourceId>>,
         pub fit: Cell<bool>,
@@ -36,6 +59,9 @@ mod imp {
         pub pinch_origin: Cell<f64>,
         pub last_zoom: Cell<f64>,
         pub on_zoom: RefCell<Option<ZoomCallback>>,
+        pub sharp: RefCell<Option<Sharp>>,
+        pub sharp_wanted: Cell<Option<SharpKey>>,
+        pub sharp_timer: RefCell<Option<glib::SourceId>>,
     }
 
     #[glib::object_subclass]
@@ -60,6 +86,9 @@ mod imp {
 
         fn dispose(&self) {
             if let Some(id) = self.timer.take() {
+                id.remove();
+            }
+            if let Some(id) = self.sharp_timer.take() {
                 id.remove();
             }
         }
@@ -96,8 +125,14 @@ impl Canvas {
         if let Some(id) = imp.timer.take() {
             id.remove();
         }
+        if let Some(id) = imp.sharp_timer.take() {
+            id.remove();
+        }
         let animated = image.as_ref().is_some_and(|i| i.frames.len() > 1);
         imp.image.replace(image);
+        imp.generation.set(imp.generation.get() + 1);
+        imp.sharp.replace(None);
+        imp.sharp_wanted.set(None);
         imp.frame.set(0);
         imp.turns.set(0);
         imp.flipped.set(false);
@@ -180,7 +215,7 @@ impl Canvas {
         self.queue_draw();
     }
 
-    /// Zoom in device pixels per image pixel.
+    /// Zoom in screen pixels per image pixel.
     fn scale(&self) -> f64 {
         if self.imp().fit.get() {
             self.fit_scale()
@@ -200,15 +235,27 @@ impl Canvas {
             return 1.0;
         }
         let (w, h) = self.rotated(image.width as f64, image.height as f64);
-        let s = (vw / w).min(vh / h) * self.device_scale();
+        let s = (vw / w).min(vh / h) * self.monitor_scale();
         // Photos are never blown up past 100% to fill the window; SVGs are.
         if image.scalable { s } else { s.min(1.0) }
     }
 
-    fn device_scale(&self) -> f64 {
+    /// Buffer pixels per logical pixel: the size GTK renders at.
+    fn surface_scale(&self) -> f64 {
         self.native()
             .and_then(|n| n.surface())
             .map_or(1.0, |s| s.scale())
+            .max(0.1)
+    }
+
+    /// Screen pixels per logical pixel: the size things end up on the panel.
+    fn monitor_scale(&self) -> f64 {
+        let Some(surface) = self.native().and_then(|n| n.surface()) else {
+            return 1.0;
+        };
+        self.display()
+            .monitor_at_surface(&surface)
+            .map_or_else(|| surface.scale(), |m| m.scale())
             .max(0.1)
     }
 
@@ -224,7 +271,7 @@ impl Canvas {
     fn display_size(&self) -> Option<(f64, f64)> {
         let image = self.imp().image.borrow();
         let image = image.as_ref()?;
-        let s = self.scale() / self.device_scale();
+        let s = self.scale() / self.monitor_scale();
         Some(self.rotated(image.width as f64 * s, image.height as f64 * s))
     }
 
@@ -261,6 +308,16 @@ impl Canvas {
             return;
         }
         imp.last_zoom.set(s);
+        if std::env::var_os("EAGLEEYE_DEBUG").is_some() {
+            eprintln!(
+                "eagleeye: zoom {:.3} surface scale {} monitor scale {} viewport {}x{}",
+                s,
+                self.surface_scale(),
+                self.monitor_scale(),
+                self.width(),
+                self.height()
+            );
+        }
         let weak = self.downgrade();
         glib::idle_add_local_once(move || {
             if let Some(canvas) = weak.upgrade()
@@ -292,6 +349,71 @@ impl Canvas {
         imp.timer.replace(Some(id));
     }
 
+    /// Ask for a Lanczos copy at `key`'s size once zooming settles. Asking
+    /// again for the same size is free; a new size replaces the old request.
+    fn request_sharp(&self, key: SharpKey) {
+        let imp = self.imp();
+        if imp.sharp_wanted.get() == Some(key) {
+            return;
+        }
+        imp.sharp_wanted.set(Some(key));
+        if let Some(id) = imp.sharp_timer.take() {
+            id.remove();
+        }
+        let weak = self.downgrade();
+        let id = glib::timeout_add_local_once(SHARPEN_AFTER, move || {
+            let Some(canvas) = weak.upgrade() else { return };
+            canvas.imp().sharp_timer.take();
+            canvas.sharpen(key);
+        });
+        imp.sharp_timer.replace(Some(id));
+    }
+
+    fn sharpen(&self, key: SharpKey) {
+        if self.imp().sharp_wanted.get() != Some(key) {
+            return;
+        }
+        let Some(source) = self.texture() else { return };
+        let debug = std::env::var_os("EAGLEEYE_DEBUG").is_some();
+        if debug {
+            eprintln!(
+                "eagleeye: sharpening {}x{} → {}x{}",
+                source.width(),
+                source.height(),
+                key.1,
+                key.2
+            );
+        }
+        let (tx, rx) = async_channel::bounded(1);
+        std::thread::spawn(move || {
+            let start = std::time::Instant::now();
+            let result = resample::lanczos(&source, key.1, key.2);
+            if debug {
+                eprintln!(
+                    "eagleeye: lanczos done ok={} in {:?}",
+                    result.is_some(),
+                    start.elapsed()
+                );
+            }
+            let _ = tx.send_blocking(result);
+        });
+        let weak = self.downgrade();
+        glib::spawn_future_local(async move {
+            let Ok(Some(texture)) = rx.recv().await else {
+                return;
+            };
+            let Some(canvas) = weak.upgrade() else { return };
+            // Only if nothing newer was asked for in the meantime.
+            if canvas.imp().sharp_wanted.get() == Some(key) {
+                if std::env::var_os("EAGLEEYE_DEBUG").is_some() {
+                    eprintln!("eagleeye: sharp copy {}x{} drawn 1:1", key.1, key.2);
+                }
+                canvas.imp().sharp.replace(Some(Sharp { key, texture }));
+                canvas.queue_draw();
+            }
+        });
+    }
+
     fn draw(&self, snapshot: &gtk::Snapshot) {
         let imp = self.imp();
         let image = imp.image.borrow();
@@ -300,27 +422,44 @@ impl Canvas {
             return;
         };
 
-        let ds = self.device_scale();
-        let scale = self.scale();
-        let (w, h) = (
-            image.width as f64 * scale / ds,
-            image.height as f64 * scale / ds,
-        );
-        let (rw, rh) = self.rotated(w, h);
-        let (px, py) = imp.pan.get();
-        let (vw, vh) = (self.width() as f64, self.height() as f64);
-        // Snap the top-left corner to a device pixel so 100% is pixel-exact.
-        let snap = |v: f64| (v * ds).round() / ds;
-        let cx = snap((vw - rw) / 2.0 + px) + rw / 2.0;
-        let cy = snap((vh - rh) / 2.0 + py) + rh / 2.0;
+        let ds = self.surface_scale();
+        let zoom = self.scale();
+        let logical = zoom / self.monitor_scale();
+        let (mut w, mut h) = (image.width as f64 * logical, image.height as f64 * logical);
+        // Buffer pixels per texel. Below 1 the texture is being shrunk.
+        let texel = w * ds / frame.texture.width() as f64;
 
-        let filter = if scale >= 3.0 {
+        let sharp = imp.sharp.borrow();
+        let mut texture = &frame.texture;
+        let mut filter = if texel >= 3.0 {
             gsk::ScalingFilter::Nearest
-        } else if scale < 1.0 {
+        } else if texel < 1.0 {
             gsk::ScalingFilter::Trilinear
         } else {
             gsk::ScalingFilter::Linear
         };
+        if texel < 1.0 && image.frames.len() == 1 {
+            let tw = ((w * ds).round() as u32).max(1);
+            let th = ((h * ds).round() as u32).max(1);
+            let key = (imp.generation.get(), tw, th);
+            match sharp.as_ref() {
+                Some(s) if s.key == key => {
+                    texture = &s.texture;
+                    // Exactly tw × th buffer pixels, so it lands 1:1.
+                    (w, h) = (tw as f64 / ds, th as f64 / ds);
+                    filter = gsk::ScalingFilter::Linear;
+                }
+                _ => self.request_sharp(key),
+            }
+        }
+
+        let (rw, rh) = self.rotated(w, h);
+        let (px, py) = imp.pan.get();
+        let (vw, vh) = (self.width() as f64, self.height() as f64);
+        // Snap the top-left corner to a buffer pixel so texels line up.
+        let snap = |v: f64| (v * ds).round() / ds;
+        let cx = snap((vw - rw) / 2.0 + px) + rw / 2.0;
+        let cy = snap((vh - rh) / 2.0 + py) + rh / 2.0;
 
         snapshot.save();
         snapshot.translate(&graphene::Point::new(cx as f32, cy as f32));
@@ -329,7 +468,7 @@ impl Canvas {
         }
         snapshot.rotate(90.0 * imp.turns.get() as f32);
         let rect = graphene::Rect::new((-w / 2.0) as f32, (-h / 2.0) as f32, w as f32, h as f32);
-        snapshot.append_scaled_texture(&frame.texture, filter, &rect);
+        snapshot.append_scaled_texture(texture, filter, &rect);
         snapshot.restore();
     }
 
