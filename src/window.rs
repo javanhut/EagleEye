@@ -303,14 +303,27 @@ impl Window {
             self.toast("EagleEye opens local files only");
             return;
         };
+        let path = std::path::absolute(&path).unwrap_or(path);
         let files = loader::siblings(&path);
+        let index = match files.iter().position(|p| *p == path) {
+            Some(index) => index,
+            // A folder is not in its own list and opens at its first image.
+            // Any other name missing from the list is a file that is not
+            // there — a path something split on a space, say. Opening the
+            // folder's first image instead just looks like EagleEye showing
+            // the wrong picture.
+            None if path.is_dir() => 0,
+            None => {
+                self.clear();
+                self.show_error(&path, "There is no file by that name.");
+                return;
+            }
+        };
         if files.is_empty() {
             self.clear();
             self.show_error(&path, "There are no images here.");
             return;
         }
-        let path = std::path::absolute(&path).unwrap_or(path);
-        let index = files.iter().position(|p| *p == path).unwrap_or(0);
         *self.0.files.borrow_mut() = files;
         self.show(index);
     }
