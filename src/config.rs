@@ -22,6 +22,8 @@ pub struct Appearance {
     pub theme_mode: ThemeMode,
     pub accent: String,
     pub transparency: bool,
+    /// Settings' glass theme (black, fog, arctic, midnight, rose).
+    pub glass_theme: String,
 }
 
 impl Default for Appearance {
@@ -30,6 +32,7 @@ impl Default for Appearance {
             theme_mode: ThemeMode::Dark,
             accent: DEFAULT_ACCENT.into(),
             transparency: true,
+            glass_theme: String::new(),
         }
     }
 }
