@@ -1,6 +1,6 @@
-//! The look: Raven Glass, the stylesheet shared with Raven Settings, Store
-//! and Viewer (`data/raven-glass.css`), plus the classes only EagleEye
-//! draws. Accent and light/dark come from desktop.toml.
+//! The look: Raven Glass, the stylesheet every Raven app shares (the
+//! raven-glass crate in RavenGUI, read from /usr/share/raven/glass/), plus
+//! the classes only EagleEye draws. Accent and light/dark come from desktop.toml.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -11,9 +11,8 @@ use libadwaita as adw;
 
 use crate::config::{DEFAULT_ACCENT, Desktop, ThemeMode};
 
-const BASE_CSS: &str = concat!(
-    include_str!("../data/raven-glass.css"),
-    r#"
+/// What only EagleEye draws, laid over Raven Glass.
+const EAGLEEYE_CSS: &str = r#"
 /* ── EagleEye-only ───────────────────────────────────────────────────── */
 .canvas { background-color: alpha(#000000, 0.18); }
 window.raven.fullscreen .canvas { background-color: #000000; }
@@ -31,10 +30,9 @@ window.raven.fullscreen .canvas { background-color: #000000; }
 .osd-bar separator { margin: 6px 4px; }
 .zoom-label { font-size: 12px; font-weight: 600; font-feature-settings: "tnum"; min-width: 56px; }
 .welcome .title-1 { font-size: 30px; font-weight: 800; letter-spacing: -0.8px; }
-"#
-);
+"#;
 
-/// EagleEye's own light overrides, laid over `raven-glass-light.css`: the
+/// EagleEye's own light overrides, laid over Raven Glass's light sheet: the
 /// pill and the canvas are drawn for a dark ground, so dark text on the dark
 /// pill would vanish in Light.
 const LIGHT_CSS: &str = r#"
@@ -59,7 +57,7 @@ thread_local! {
 pub fn apply() {
     let display = gtk::gdk::Display::default().expect("no display");
     let base = gtk::CssProvider::new();
-    base.load_from_string(BASE_CSS);
+    base.load_from_string(&format!("{}{EAGLEEYE_CSS}", raven_glass::base_css()));
     gtk::style_context_add_provider_for_display(
         &display,
         &base,
@@ -87,13 +85,9 @@ fn refresh() {
     let light = appearance.theme_mode == ThemeMode::Light;
     let css = format!(
         "@define-color accent_bg_color {accent};\n@define-color accent_color {accent};\n{}{}{}",
-        if light {
-            include_str!("../data/raven-glass-light.css")
-        } else {
-            ""
-        },
+        if light { raven_glass::light_css() } else { "" },
         if light { LIGHT_CSS } else { "" },
-        crate::glass_tint::css(&appearance.glass_theme, light),
+        raven_glass::tint::css(&appearance.glass_theme, light),
     );
     if let Some(display) = gtk::gdk::Display::default() {
         OVERLAY.with(|slot| {

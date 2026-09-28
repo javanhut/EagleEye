@@ -329,6 +329,7 @@ dependencies = [
  "gtk4",
  "image",
  "libadwaita",
+ "raven-glass",
  "resvg",
  "serde",
  "toml 0.8.23",
@@ -1477,6 +1478,10 @@ dependencies = [
  "v_frame",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "raven-glass"
+version = "0.0.1"
 
 [[package]]
 name = "ravif"

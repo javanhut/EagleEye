@@ -4,7 +4,6 @@
 
 mod canvas;
 mod config;
-mod glass_tint;
 mod loader;
 mod resample;
 mod theme;
